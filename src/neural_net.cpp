@@ -1,9 +1,12 @@
 #include "neural_net.hpp"
+#include "Eigen/src/Core/Matrix.h"
 #include <mnist_loader.hpp>
 #include <Eigen/Dense>
 #include <filesystem>
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <stdexcept>
 
 Layer::Layer(int previous_layer_size, int current_layer_size, bool is_output_layer, int batchSize) : previous_layer_size(previous_layer_size), current_layer_size(current_layer_size), is_output_layer(is_output_layer), batchSize(batchSize) {
     weights = Eigen::MatrixXd::Random(current_layer_size, previous_layer_size)*std::sqrt(1.0/previous_layer_size);
@@ -44,20 +47,33 @@ NeuralNet::NeuralNet(std::vector<int> layer_sizes, int batchSize): layer_sizes(l
             layers.push_back(Layer(layer_sizes[i-1], layer_sizes[i], true, batchSize));
         }
     }
-    this->best_accuracy=-1.0;
-    this->epoch_accuracy=0.0;
-    this->epoch=0;
-    this->batch_counter=0;
-    this->dataset=MNISTDataset::load(
+    best_accuracy=-1.0;
+    epoch_accuracy=0.0;
+    epoch=0;
+    batch_counter=0;
+    dataset=MNISTDataset::load(
         (std::filesystem::path("data") / "train-images-idx3-ubyte").string(),
         (std::filesystem::path("data") / "train-labels-idx1-ubyte").string(),
         (std::filesystem::path("data") / "t10k-images-idx3-ubyte").string(),
         (std::filesystem::path("data") / "t10k-labels-idx1-ubyte").string()
     );
-    this->dataset.shuffle_images(this->dataset.size_of_training_set);
-    this->epoch_accuracies.push_back(0.0);
-    this->epoch_accuracies.push_back(0.0);
-    this->keep_training=true;
+    dataset.shuffle_images(dataset.size_of_training_set);
+    epoch_accuracies.push_back(0.0);
+    epoch_accuracies.push_back(0.0);
+    keep_training=true;
+    prev_best_accuracy=-1.0;
+    save_model=false;
+}
+
+int NeuralNet::test(Eigen::MatrixXd& input){
+    layers[0].forward(input);
+    for(int j=1;j<layers.size();j++){
+        layers[j].forward(layers[j-1].activations);
+    }
+    Eigen::MatrixXd output=layers[layers.size()-1].activations;
+    int index_of_max_row, index_of_max_col;
+    output.maxCoeff(&index_of_max_row, &index_of_max_col);
+    return index_of_max_row;
 }
 
 float NeuralNet::train(float learning_rate){
@@ -119,7 +135,7 @@ float NeuralNet::train(float learning_rate){
         }
         epoch_accuracy=float(correct)/dataset.size_of_validation_set;
         epoch_accuracies.push_back(epoch_accuracy);
-        if (epoch_accuracy>best_accuracy){
+        if (epoch_accuracy>best_accuracy+0.3){  //ensure not plateauing too much
             not_improving=0;
             best_accuracy=epoch_accuracy;
             for(int j=0;j<layers.size();j++){
@@ -166,6 +182,83 @@ float NeuralNet::train(float learning_rate){
     return test_accuracy;
 }
 
+void NeuralNet::save(const std::string& filename){
+    if (prev_best_accuracy>best_accuracy){
+        return;
+    }
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
+    int size_of_layer_sizes=layer_sizes.size();
+    file.write(reinterpret_cast<char*>(&best_accuracy), sizeof(best_accuracy));
+    file.write(reinterpret_cast<char*>(&size_of_layer_sizes), sizeof(size_of_layer_sizes));
+    for (int i=0;i<layer_sizes.size();i++){
+        file.write(reinterpret_cast<char*>(&layer_sizes[i]), sizeof(layer_sizes[i]));
+    }
+    for(int i=0;i<layers.size();i++){
+        for(int j=0;j<layers[i].weights.rows();j++){
+            for(int k=0;k<layers[i].weights.cols();k++){
+                file.write(reinterpret_cast<char*>(&layers[i].weights(j,k)), sizeof(layers[i].weights(j,k)));
+            }
+            file.write(reinterpret_cast<char*>(&layers[i].biases(j)), sizeof(layers[i].biases(j)));
+        }
+    }
+    prev_best_accuracy=best_accuracy;
+}
 
+void NeuralNet::reinitialize_weights(){
+    for(int i=0;i<layers.size();i++){
+        layers[i].weights=Eigen::MatrixXd::Random(layers[i].weights.rows(), layers[i].weights.cols())*std::sqrt(1.0/layers[i].previous_layer_size);
+        layers[i].biases=Eigen::VectorXd::Random(layers[i].biases.rows());
+    }
+}
 
+bool NeuralNet::load(const std::string& filename){
+    std::ifstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
+
+    file.read(reinterpret_cast<char*>(&best_accuracy), sizeof(best_accuracy));
+    if (!file){
+        prev_best_accuracy=-1.0;
+        return false;
+    }
+    int size_of_layer_sizes;
+    file.read(reinterpret_cast<char*>(&size_of_layer_sizes), sizeof(size_of_layer_sizes));
+    if (size_of_layer_sizes!=layer_sizes.size() || !file){
+        prev_best_accuracy=-1.0;
+        return false;
+    }
+    prev_best_accuracy=best_accuracy;
+    for(int i=0;i<layer_sizes.size();i++){
+        int layer_size;
+        file.read(reinterpret_cast<char*>(&layer_size), sizeof(layer_size));
+        if (layer_size!=layer_sizes[i] || !file){
+            prev_best_accuracy=-1.0;
+            return false;
+        }
+    }
+    for(int i=0;i<layers.size();i++){
+        for(int j=0;j<layers[i].weights.rows();j++){
+            for(int k=0;k<layers[i].weights.cols();k++){
+                file.read(reinterpret_cast<char*>(&layers[i].weights(j,k)), sizeof(layers[i].weights(j,k)));
+                
+                if (!file){
+                    prev_best_accuracy=-1.0;
+                    return false;
+                }
+            }
+            file.read(reinterpret_cast<char*>(&layers[i].biases(j)), sizeof(layers[i].biases(j)));
+            if (!file){
+                prev_best_accuracy=-1.0;
+                return false;
+            }
+        }
+        layers[i].best_weights=layers[i].weights;
+        layers[i].best_biases=layers[i].biases;
+    }
+    return true;
+}
 

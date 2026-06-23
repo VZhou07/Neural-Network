@@ -40,4 +40,10 @@ class NeuralNet{
     std::vector<Layer> layers;
     MNISTDataset dataset;
     int batch_counter;
+    float prev_best_accuracy;
+    bool save_model;
+    int test(Eigen::MatrixXd& input);
+    void save(const std::string& filename);
+    bool load(const std::string& filename);
+    void reinitialize_weights();
 };    
