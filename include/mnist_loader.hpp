@@ -6,29 +6,21 @@
 
 class MNISTDataset {
 public:
-    MNISTDataset(uint32_t magic_number=0,
-         uint32_t number_of_images=0, 
-         uint32_t rows=0, 
-         uint32_t columns=0, 
+    MNISTDataset(
          std::vector<uint8_t> images={}, 
-         uint32_t labels_magic_number=0, 
-         uint32_t number_of_labels=0, 
-         std::vector<uint8_t> labels={});
+         std::vector<uint8_t> labels={},
+         std::vector<uint8_t> test_images={},
+         std::vector<uint8_t> test_labels={});
 
-    uint32_t magic_number = 0;
-    uint32_t number_of_images = 0;
-    uint32_t rows = 0;
-    uint32_t columns = 0;
-    uint32_t labels_magic_number = 0;
-    uint32_t number_of_labels = 0;
+    static MNISTDataset load(const std::string& filename, const std::string& labelpath, const std::string& test_filename, const std::string& test_labelpath);
+    static uint32_t flip_endian(uint32_t value);
+    void shuffle_images(int size_of_dataset);
     std::vector<uint8_t> images;
     std::vector<uint8_t> labels;
+    std::vector<uint8_t> test_images;
+    std::vector<uint8_t> test_labels;
 
-    static MNISTDataset load(const std::string& filename, const std::string& labelpath);
-    static void shuffle_images();
-
-    
-
-private:
-    static uint32_t flip_endian(uint32_t value);
+    size_t size_of_training_set=48000;
+    size_t size_of_validation_set=12000;
+    size_t size_of_test_set=10000;
 };
