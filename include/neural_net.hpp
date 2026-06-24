@@ -26,8 +26,8 @@ class Layer{
 
 class NeuralNet{
     public:
-    NeuralNet(std::vector<int> layer_sizes, int batchSize=32);
-    float train(float learning_rate);
+    NeuralNet(std::vector<int> layer_sizes, int batchSize=32, bool save_read=true,bool save_write=true);
+    void train(float learning_rate);
     int input_size;
     std::vector<int> layer_sizes;
     int output_size;
@@ -46,4 +46,7 @@ class NeuralNet{
     void save(const std::string& filename);
     bool load(const std::string& filename);
     void reinitialize_weights();
+    float test_accuracy();
+    bool save_read;
+    bool save_write;
 };    

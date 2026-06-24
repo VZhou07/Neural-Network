@@ -36,7 +36,7 @@ Eigen::MatrixXd Layer::backward(Eigen::MatrixXd& dA, Eigen::MatrixXd& activation
     return dA_prev;
 }
 
-NeuralNet::NeuralNet(std::vector<int> layer_sizes, int batchSize): layer_sizes(layer_sizes), batchSize(batchSize) {
+NeuralNet::NeuralNet(std::vector<int> layer_sizes, int batchSize,bool save_read, bool save_write): layer_sizes(layer_sizes), batchSize(batchSize), save_read(save_read), save_write(save_write) {
     for(int i=0;i<layer_sizes.size();i++){
         if(i==0){
         }
@@ -76,7 +76,7 @@ int NeuralNet::test(Eigen::MatrixXd& input){
     return index_of_max_row;
 }
 
-float NeuralNet::train(float learning_rate){
+void NeuralNet::train(float learning_rate){
     // while the accuracy is not improving, train the network
     int not_improving=0;
     int epoch_counter=0;
@@ -135,21 +135,21 @@ float NeuralNet::train(float learning_rate){
         }
         epoch_accuracy=float(correct)/dataset.size_of_validation_set;
         epoch_accuracies.push_back(epoch_accuracy);
-        if (epoch_accuracy>best_accuracy+0.3){  //ensure not plateauing too much
-            not_improving=0;
+        not_improving++;
+        if (epoch_accuracy>best_accuracy){
+            if (epoch_accuracy>best_accuracy+0.003){ //ensure not plateauing too much
+                not_improving=0;
+            }            
             best_accuracy=epoch_accuracy;
             for(int j=0;j<layers.size();j++){
                 layers[j].best_weights=layers[j].weights;
                 layers[j].best_biases=layers[j].biases;
             }
         }
-        else{
-            not_improving++;
-            if (not_improving>10){
-                keep_training=false;
-                std::cout<<"Not improving for 10 epochs, stopping training"<<std::endl;
-                break;
-            }
+        if (not_improving>5){
+            keep_training=false;
+            std::cout<<"Not improving for 5 epochs, stopping training"<<std::endl;
+            break;
         }
         epoch_counter++;
         std::cout<<"epoch: "<<epoch_counter<<", accuracy: "<<epoch_accuracy<<std::endl;
@@ -160,7 +160,9 @@ float NeuralNet::train(float learning_rate){
         layers[j].weights=layers[j].best_weights;
         layers[j].biases=layers[j].best_biases;
     }
-    //test
+}
+
+float NeuralNet::test_accuracy(){
     int correct=0;
     for (int i=0;i<dataset.size_of_test_set;i++){
         Eigen::MatrixXd input_activations = Eigen::MatrixXd::Zero(784, 1);
@@ -181,9 +183,8 @@ float NeuralNet::train(float learning_rate){
     float test_accuracy=float(correct)/dataset.size_of_test_set;
     return test_accuracy;
 }
-
 void NeuralNet::save(const std::string& filename){
-    if (prev_best_accuracy>best_accuracy){
+    if (prev_best_accuracy>best_accuracy || !save_write){
         return;
     }
     std::ofstream file(filename, std::ios::binary);
@@ -215,6 +216,9 @@ void NeuralNet::reinitialize_weights(){
 }
 
 bool NeuralNet::load(const std::string& filename){
+    if (!save_read){
+        return false;
+    }
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open file: " + filename);

@@ -19,6 +19,8 @@ FetchContent_MakeAvailable(raylib)
 
 FetchContent_MakeAvailable(Eigen3)
 
+find_package(Threads REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -26,3 +28,4 @@ add_executable(main src/main.cpp src/mnist_loader.cpp src/neural_net.cpp)
 target_include_directories(main PRIVATE include)
 target_link_libraries(main PRIVATE Eigen3::Eigen)
 target_link_libraries(main PRIVATE raylib)
+target_link_libraries(main PRIVATE Threads::Threads)
