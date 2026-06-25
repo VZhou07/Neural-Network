@@ -22,6 +22,8 @@ class Layer{
     Eigen::MatrixXd best_weights;
     Eigen::VectorXd best_biases;
     void sigmoid();
+    void ReLU();
+    void softmax();
 };    
 
 class NeuralNet{

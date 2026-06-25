@@ -9,7 +9,7 @@
 #include <stdexcept>
 
 Layer::Layer(int previous_layer_size, int current_layer_size, bool is_output_layer, int batchSize) : previous_layer_size(previous_layer_size), current_layer_size(current_layer_size), is_output_layer(is_output_layer), batchSize(batchSize) {
-    weights = Eigen::MatrixXd::Random(current_layer_size, previous_layer_size)*std::sqrt(1.0/previous_layer_size);
+    weights = Eigen::MatrixXd::Random(current_layer_size, previous_layer_size)*std::sqrt(2.0/previous_layer_size);
     biases = Eigen::VectorXd::Random(current_layer_size);
     activations = Eigen::MatrixXd::Zero(current_layer_size,batchSize);
     pre_activations = Eigen::MatrixXd::Zero(current_layer_size,batchSize);
@@ -21,13 +21,39 @@ void Layer::sigmoid(){
     activations = (1.0 / (1.0 + (-pre_activations.array()).exp())).matrix();
 }
 
+void Layer::ReLU(){
+    activations = pre_activations.cwiseMax(0.0);
+}
+
+void Layer::softmax(){
+    //stable softmax so no overflow
+    Eigen::RowVectorXd largest_column=pre_activations.colwise().maxCoeff();
+    Eigen::MatrixXd stable_pre_activations=pre_activations.array().rowwise()-largest_column.array();
+    activations=stable_pre_activations.array().exp().matrix();
+    Eigen::RowVectorXd sum_of_exp=activations.array().colwise().sum();
+    activations= (activations.array().rowwise() / sum_of_exp.array()).matrix();
+    }
+
 void Layer::forward(Eigen::MatrixXd& activations_prev_layer){
     pre_activations = (weights*activations_prev_layer).colwise() + biases;
-    sigmoid();
+    if (is_output_layer){
+        softmax();
+    }
+    else{
+        ReLU();
+    }
 }
 
 Eigen::MatrixXd Layer::backward(Eigen::MatrixXd& dA, Eigen::MatrixXd& activations_prev_layer, float learning_rate){
-    this->dZ=(dA.array()*(activations.array()*(1.0-activations.array()))).matrix();
+    Eigen::MatrixXd dZ;
+    if (is_output_layer){
+        dZ = dA;
+    } 
+    else{
+        dZ = dA.cwiseProduct(pre_activations.unaryExpr(
+            [](double x) { return x > 0.0 ? 1.0 : 0.0; }
+        ));
+    }
     this->dW=float(1.0/batchSize)*(dZ*activations_prev_layer.transpose());
     this->db=float(1.0/batchSize)*dZ.rowwise().sum();
     Eigen::MatrixXd dA_prev=(weights.transpose()*dZ);
@@ -81,6 +107,7 @@ void NeuralNet::train(float learning_rate){
     int not_improving=0;
     int epoch_counter=0;
     while (keep_training){
+        dataset.shuffle_images(dataset.size_of_training_set);
         batch_counter=0;
         while(batch_counter<dataset.size_of_training_set/batchSize){
             Eigen::MatrixXd input_activations = Eigen::MatrixXd::Zero(784, batchSize);
@@ -184,7 +211,7 @@ float NeuralNet::test_accuracy(){
     return test_accuracy;
 }
 void NeuralNet::save(const std::string& filename){
-    if (prev_best_accuracy>best_accuracy || !save_write){
+    if (prev_best_accuracy>best_accuracy || !save_write || save_read){
         return;
     }
     std::ofstream file(filename, std::ios::binary);
