@@ -2,8 +2,8 @@
 #include <raylib.h>
 #include "neural_net.hpp"
 #include <thread>
+#include <cmath>
 #include <Eigen/Dense>
-#include <atomic>
 
 std::atomic<bool> done_training=false;
 
@@ -38,7 +38,9 @@ int main() {
     bool display_not_done=false;
     Vector2 prev={0,0};
     bool has_prev=false;
+    unsigned char* input_data=new unsigned char[784];
     while (!WindowShouldClose()){
+        Eigen::MatrixXd processed_image=Eigen::MatrixXd::Zero(784,1);
         Vector2 mouse_position=GetMousePosition();
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
             has_prev=false;
@@ -68,22 +70,94 @@ int main() {
         if (IsKeyPressed(KEY_ENTER) && done_training){
             Image image=LoadImageFromTexture(target.texture);
             ImageFlipVertical(&image);
-            ImageResizeNN(&image, 28, 28);
-            Image display=ImageCopy(image);
-            Eigen::MatrixXd input=Eigen::MatrixXd::Zero(784, 1);
-
-            //size display back up to see the data loss
-            //ImageResizeNN(&display, 280, 280);
-            
-            const unsigned char* image_data=static_cast<const unsigned char*>(image.data); //gives rgba
-            for(int i=0;i<28;i++){
-                for(int j=0;j<28;j++){
-                    int index=(i*28+j)*4;
-                    input(i*28+j,0)=image_data[index]/255.0;
+            int y_max=-1;
+            int x_max=-1;
+            int y_min=281;
+            int x_min=281;
+            const unsigned char* texture_data=static_cast<const unsigned char*>(image.data);
+            for(int i=0;i<image.height;i++){
+                for(int j=0;j<image.width;j++){
+                    int index=(i*280+j)*4;
+                    unsigned char r=texture_data[index];
+                    if (r>=250){
+                        if (i<y_min){
+                            y_min=i;
+                        }
+                        if (i>y_max){
+                            y_max=i;
+                        }
+                        if (j<x_min){
+                            x_min=j;
+                        }
+                        if (j>x_max){
+                            x_max=j;
+                        }
+                    }
                 }
             }
-            std::cout << "Input: " << input << std::endl;
-            prediction=net.test(input);
+            float width=static_cast<float>(x_max-x_min)+1.0;
+            float height=static_cast<float>(y_max-y_min)+1.0;
+            if (width<0||height<0){
+                for(int i=0;i<784;i++){
+                    input_data[i]=0;
+                    processed_image(i,0)=0;
+                }
+            }
+            else{
+
+                ImageCrop(&image, Rectangle{static_cast<float>(x_min), static_cast<float>(y_min), width, height});            
+                float width_ratio=float(image.width)/20;
+                float height_ratio=float(image.height)/20;
+                
+                if (width_ratio>height_ratio){
+                    ImageResize(&image, 20, std::round(image.height/width_ratio));
+                }
+                else{
+                    ImageResize(&image, image.width/height_ratio, 20);
+                }
+                
+                const unsigned char* image_data=static_cast<const unsigned char*>(image.data); //gives rgba
+                float x_moment=0;
+                float y_moment=0;
+                float total_mass=0;
+                for(int i=0;i<image.height;i++){
+                    for(int j=0;j<image.width;j++){
+                        int index=(i*image.width+j)*4;
+                        unsigned char r=image_data[index];
+                        x_moment+=r/255.0*j;
+                        y_moment+=r/255.0*i;
+                        total_mass+=r/255.0;
+                    }
+                }
+                float center_x=total_mass>0?x_moment/total_mass:0;
+                float center_y=total_mass>0?y_moment/total_mass:0;
+
+                int shift_x=std::round(13.5-center_x); //13.5 is the center of the image
+                int shift_y=std::round(13.5-center_y);
+                int count=0;
+                for (int i=0;i<image.height;i++){
+                    for(int j=0;j<image.width;j++){
+                        int target_x=j+shift_x;
+                        int target_y=i+shift_y;
+                        if (target_x>=0 && target_x<28 && target_y>=0 && target_y<28){
+                            processed_image(target_y*28+target_x,0)=image_data[(i*image.width+j)*4]/255.0;
+                        }
+                    }
+                }
+                for(int i=0;i<784;i++){
+                    input_data[i]=static_cast<unsigned char>(processed_image(i,0)*255.0);
+                }
+            }
+
+            Image display = {
+                .data=input_data,
+                .width=28,
+                .height=28,
+                .mipmaps=1,
+                .format=PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
+            };
+            std::cout << "Processed Image: " << processed_image << std::endl;
+            prediction=net.test(processed_image);
             std::cout << "Prediction: " << prediction << std::endl;
             if (has_preview){
                 UnloadTexture(preview_texture);
@@ -91,10 +165,8 @@ int main() {
             preview_texture=LoadTextureFromImage(display);
             has_preview=true;
             UnloadImage(image);
-            UnloadImage(display);
             }
             
-        //DRAW CANVAS OF 560x560 filled with white
         BeginDrawing();
         ClearBackground(GRAY);
         if (!done_training){
@@ -115,6 +187,9 @@ int main() {
         EndDrawing();
     }
     t.join();
+    delete[] input_data;
+    UnloadTexture(preview_texture);
+    UnloadRenderTexture(target);
     net.save("data/best_model.bin");
     return 0;
 }
