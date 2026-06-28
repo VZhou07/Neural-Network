@@ -170,11 +170,13 @@ int main() {
         BeginDrawing();
         ClearBackground(GRAY);
         if (!done_training){
-            DrawText("Training not done, please wait", 200, 10, 20, BLACK);
+            DrawText("Training not done, please wait", 10, 10, 20, BLACK);
         }
         else{
-            DrawText("Click Enter to Submit Drawing", 200, 10, 20, BLACK);
+            DrawText("Click Enter to Submit Drawing", 10, 10, 20, BLACK);
         }
+        DrawText("Press Q to quit and save model", 10, 330, 20, BLACK);
+        DrawText("Press C to clear canvas", 10, 350, 20, BLACK);
         DrawRectangleLinesEx(draw_rectangle, 2, BLACK);
         DrawTextureRec(target.texture, {0, 0, 280, -280}, {10, 30}, WHITE);
         if (has_preview){
