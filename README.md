@@ -4,6 +4,12 @@ A C++ feedforward neural network trained on the [MNIST](http://yann.lecun.com/ex
 
 The network is implemented from scratch using [Eigen](https://eigen.tuxfamily.org/).
 
+### Flow Chart
+![Flow Chart](assets/Neural_Net_Flowchart(2).png)
+
+### Video Explanation
+![img src="/assets/neural_net_vid.png"](https://youtu.be/fKm7jqmdumg)
+
 ## Features
 
 - **Custom MLP** with configurable layer sizes, ReLU hidden layers, and softmax output
