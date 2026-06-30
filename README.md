@@ -1,14 +1,14 @@
 # Neural Network MNIST Classifier
 
-A C++ feedforward neural network trained on the [MNIST](http://yann.lecun.com/exdb/mnist/) handwritten digit dataset, with a [raylib](https://www.raylib.com/) GUI for drawing digits and running live predictions.
+A C++ feedforward neural network trained on the [MNIST](http://yann.lecun.com/exdb/mnist/) handwritten digit dataset, with a [raylib](https://www.raylib.com/) GUI for drawing digits and running live predictions. The trained saved weights and biases have an accuracy of 95.4%, though you can probably get a higher accuracy by playing around with the layer sizes and changing the condition on line of `neural_net.cpp` : `if (epoch_accuracy>best_accuracy+0.003)`.
 
 The network is implemented from scratch using [Eigen](https://eigen.tuxfamily.org/).
 
 ### Flow Chart
-![Flow Chart](assets/Neural_Net_Flowchart(2).png)
+![Flow Chart](assets/Neural_Net_Flowchart(3).png)
 
 ### Video Explanation
-![img src="/assets/neural_net_vid.png"](https://youtu.be/fKm7jqmdumg)
+[![Video Explanation](assets/neural_net_vid.png)](https://youtu.be/fKm7jqmdumg)
 
 ## Features
 
